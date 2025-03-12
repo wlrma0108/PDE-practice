@@ -7,9 +7,11 @@ int main(){
     long long overflow = LLONG_MAX;
     //long long으로 8바이트 단위를 얻는다.
     // 위의 문제와 굉장히 유사하다. 
-    overflow += LLONG_MAX;
+    overflow += 1;
     std:: cout << overflow;
     std:: cout << no_overflow;
+
+    return 0;
 
 }
 // 결과값-9223372036854775808 9223372036854775807

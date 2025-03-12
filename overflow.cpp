@@ -13,7 +13,7 @@ int main(){
     std :: cout << no_overflow;
     std :: cout << overflow
     //어떤식으로 발현되는지 살펴보자. 
-
+    return 0;
 }
 
 
