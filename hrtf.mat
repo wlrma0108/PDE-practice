@@ -1,0 +1,83 @@
+%% HRTF_Render_Check.m
+% —————————————————————————————
+% 1) 파일 존재 검사
+monoFile = 'input_mono.wav';
+hrirFile = 'large_pinna_final.mat';  % 또는 'small_pinna_final.mat'
+assert(exist(monoFile,'file')==2, "Mono WAV 파일이 없습니다: " + monoFile);
+assert(exist(hrirFile,'file')==2, "HRIR MAT 파일이 없습니다: " + hrirFile);
+
+% —————————————————————————————
+% 2) 파라미터 설정
+angles    = [0, 30, 60, 90, 120];  % 렌더링할 각도(°) 리스트
+outFolder = 'outputs_matlab';
+
+% —————————————————————————————
+% 3) HRIR 데이터 로드 및 변수 확인
+data = load(hrirFile);
+vars = fieldnames(data);
+assert(ismember('left', vars) && ismember('right', vars), ...
+    ".mat 파일에 left/right 변수가 없습니다: " + hrirFile);
+leftHRIR  = data.left;
+rightHRIR = data.right;
+[impLen, nAngles] = size(leftHRIR);
+assert(size(rightHRIR,1)==impLen && size(rightHRIR,2)==nAngles, ...
+    "left/right 크기가 일치하지 않습니다.");
+
+% —————————————————————————————
+% 4) Mono WAV 로드 및 형식 검사
+[mono, fs] = audioread(monoFile);
+fprintf("Loaded WAV: %s (%d Hz, %d samples, %d channels)\n", ...
+        monoFile, fs, length(mono), size(mono,2));
+if size(mono,2)>1
+    mono = mono(:,1);
+    warning("스테레오 파일이어서 첫 채널만 사용합니다.");
+end
+
+% —————————————————————————————
+% 5) 출력 폴더 준비
+if ~exist(outFolder,'dir')
+    mkdir(outFolder);
+end
+
+% —————————————————————————————
+% 6) 렌더링 루프
+for ang = angles
+    % 6.1) 각도 유효성 검사 및 인덱스 계산
+    assert(mod(ang,5)==0 && ang>=0 && ang<360, ...
+        "각도는 0~355 사이의 5° 배수여야 합니다: " + num2str(ang));
+    idx = mod(ang/5, nAngles) + 1;  
+
+    % 6.2) 임펄스 응답 추출
+    hL = leftHRIR(:, idx);
+    hR = rightHRIR(:, idx);
+
+    % 6.3) FIR 필터링 (콘볼루션)
+    outL = filter(hL, 1, mono);
+    outR = filter(hR, 1, mono);
+
+    % 6.4) 길이 트리밍 & 정규화
+    N = length(mono) + impLen - 1;
+    outL = outL(1:N);
+    outR = outR(1:N);
+    peak = max([abs(outL); abs(outR)]);
+    if peak > 0
+        outL = outL/peak;
+        outR = outR/peak;
+    end
+
+    % 6.5) 스테레오 결합 및 저장
+    stereo = [outL, outR];
+    fname  = sprintf('output_%03ddeg.wav', ang);
+    outpath = fullfile(outFolder, fname);
+    audiowrite(outpath, stereo, fs);
+    fprintf("Saved: %s\n", outpath);
+
+    % 6.6) 쓰기 검증
+    info = audioinfo(outpath);
+    assert(info.SampleRate==fs && info.NumChannels==2, ...
+        "출력 WAV 정보가 예상과 다릅니다: " + outpath);
+end
+
+% —————————————————————————————
+% 7) 완료 메시지
+fprintf("모든 렌더링 완료! 결과는 '%s' 폴더를 확인하세요.\n", outFolder);
